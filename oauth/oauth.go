@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/fatih/color"
@@ -58,11 +59,12 @@ type AuthenticateUserFuncConfig struct {
 // Initiate an *AuthorizedClient with a given APPKEY, SECRET
 // TODO: Include the user's given callback URL, as if someone wants to host off-prem they should be able to
 // TODO: Investigate the previous statement, localhost might work for any implementation?
-func Initiate(APPKEY, SECRET string) *AuthorizedClient {
+func Initiate(APPKEY, SECRET, url string) *AuthorizedClient {
 	conf := &oauth2.Config{
 
 		ClientID:     APPKEY, // Schwab App Key
 		ClientSecret: SECRET, // Schwab App Secret
+		RedirectURL:  url,
 
 		Endpoint: oauth2.Endpoint{
 			AuthURL:  "https://api.schwabapi.com/v1/oauth/authorize",
@@ -129,7 +131,7 @@ func authenticateUser(oauthConfig *oauth2.Config, options ...AuthenticateUserOpt
 
 	// Redirect user to consent page to ask for permission
 	// for the scopes specified above.
-	oauthConfig.RedirectURL = fmt.Sprintf("https://%s", IP)
+	//oauthConfig.RedirectURL = fmt.Sprintf("https://%s", IP)
 	// Some random string, random for each request
 	oauthStateString := randSeq(16)
 	ctx = context.WithValue(ctx, oauthStateStringContextKey, oauthStateString)
@@ -191,7 +193,9 @@ func startHTTPServer(ctx context.Context, conf *oauth2.Config) (clientChan chan 
 
 	http.HandleFunc("/", callbackHandler(ctx, conf, clientChan))
 
-	srv := &http.Server{}
+	srv := &http.Server{
+		Addr: strings.Replace(conf.RedirectURL, "https://", "", 1), // Cannot have https:// prefix
+	}
 
 	// handle server shutdown signal
 	go func() {
